@@ -42,6 +42,33 @@ sms.send = function(phone, message, options, success, failure) {
     );
 };
 
+sms.sendWhatsappSms = function(phone, message, options, success, failure) {
+    // parsing phone numbers
+    phone = convertPhoneToArray(phone);
+
+    // parsing options
+    var replaceLineBreaks = false;
+    var androidIntent = '';
+    if (typeof options === 'string') { // ensuring backward compatibility
+        window.console.warn('[DEPRECATED] Passing a string as a third argument is deprecated. Please refer to the documentation to pass the right parameter: https://github.com/cordova-sms/cordova-sms-plugin.');
+        androidIntent = options;
+    }
+    else if (typeof options === 'object') {
+        replaceLineBreaks = options.replaceLineBreaks || false;
+        if (options.android && typeof options.android === 'object') {
+            androidIntent = options.android.intent;
+        }
+    }
+
+    // fire
+    exec(
+        success,
+        failure,
+        'Sms',
+        'send_whats_app_sms', [phone, message, androidIntent, replaceLineBreaks]
+    );
+};
+
 sms.hasPermission = function(success, failure) {
     // fire
     exec(

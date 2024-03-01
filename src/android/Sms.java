@@ -23,6 +23,8 @@ public class Sms extends CordovaPlugin {
 
 	public final String ACTION_SEND_SMS = "send";
 
+	public final String ACTION_SEND_WHATS_APP_SMS = "send_whats_app_sms";
+
 	public final String ACTION_HAS_PERMISSION = "has_permission";
 	
 	public final String ACTION_REQUEST_PERMISSION = "request_permission";
@@ -32,6 +34,10 @@ public class Sms extends CordovaPlugin {
 	private static final int SEND_SMS_REQ_CODE = 0;
 
 	private static final int REQUEST_PERMISSION_REQ_CODE = 1;
+
+	private static final String MESSAGE_TYPE_SMS = "sms";
+
+	private static final String MESSAGE_TYPE_WHATSAPP = "whats_Spp";
 
 	private CallbackContext callbackContext;
 
@@ -49,10 +55,14 @@ public class Sms extends CordovaPlugin {
 				// It might throw a NPE, but it doesn't matter.
 			}
 			if (isIntent || hasPermission()) {
-				sendSMS();
+				sendSMS(MESSAGE_TYPE_SMS);
 			} else {
 				requestPermission(SEND_SMS_REQ_CODE);
 			}
+			return true;
+		}
+		else if (action.equals(ACTION_SEND_WHATS_APP_SMS)) {
+			sendSMS(MESSAGE_TYPE_WHATSAPP);
 			return true;
 		}
 		else if (action.equals(ACTION_HAS_PERMISSION)) {
@@ -82,13 +92,13 @@ public class Sms extends CordovaPlugin {
 			}
 		}
 		if (requestCode == SEND_SMS_REQ_CODE) {
-			sendSMS();
+			sendSMS(MESSAGE_TYPE_SMS);
 			return;
 		}
 		callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.OK, true));
 	}
 
-	private boolean sendSMS() {
+	private boolean sendSMS(String messageType) {
 		cordova.getThreadPool().execute(new Runnable() {
 			@Override
 			public void run() {
@@ -112,12 +122,17 @@ public class Sms extends CordovaPlugin {
 						callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.ERROR, "SMS not supported on this platform"));
 						return;
 					}
-					if (method.equalsIgnoreCase("INTENT")) {
-						invokeSMSIntent(phoneNumber, message);
-						// always passes success back to the app
+					if(messageType.equalsIgnoreCase(MESSAGE_TYPE_SMS)) {
+						if (method.equalsIgnoreCase("INTENT")) {
+							invokeSMSIntent(phoneNumber, message);
+							// always passes success back to the app
+							callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.OK));
+						} else {
+							send(callbackContext, phoneNumber, message);
+						}
+					} else if (messageType.equalsIgnoreCase(MESSAGE_TYPE_WHATSAPP)) {
+						sendWhatsappSms(phoneNumber, message);
 						callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.OK));
-					} else {
-						send(callbackContext, phoneNumber, message);
 					}
 					return;
 				} catch (JSONException ex) {
@@ -126,6 +141,13 @@ public class Sms extends CordovaPlugin {
 			}
 		});
 		return true;
+	}
+
+	private void sendWhatsappSms(String phoneNumber, String message) {
+		Intent sendIntent;
+		sendIntent = new Intent(Intent.ACTION_VIEW);
+		sendIntent.setData(Uri.parse("http://api.whatsapp.com/send?phone="+"+91"+phoneNumber + "&text="+message));
+		this.cordova.getActivity().startActivity(sendIntent);
 	}
 
 	private boolean checkSupport() {
@@ -147,11 +169,11 @@ public class Sms extends CordovaPlugin {
 				sendIntent.setPackage(defaultSmsPackageName);
 			}
 		} else {
-			sendIntent = new Intent(Intent.ACTION_VIEW);
+			Uri sms_uri = Uri.parse("smsto:" + Uri.encode(phoneNumber));
+			sendIntent = new Intent(Intent.ACTION_SENDTO, sms_uri);
 			sendIntent.putExtra("sms_body", message);
 			// See http://stackoverflow.com/questions/7242190/sending-sms-using-intent-does-not-add-recipients-on-some-devices
 			sendIntent.putExtra("address", phoneNumber);
-			sendIntent.setData(Uri.parse("smsto:" + Uri.encode(phoneNumber)));
 		}
 		this.cordova.getActivity().startActivity(sendIntent);
 	}
@@ -196,7 +218,7 @@ public class Sms extends CordovaPlugin {
 		String intentFilterAction = INTENT_FILTER_SMS_SENT + java.util.UUID.randomUUID().toString();
 		this.cordova.getActivity().registerReceiver(broadcastReceiver, new IntentFilter(intentFilterAction));
 
-		PendingIntent sentIntent = PendingIntent.getBroadcast(this.cordova.getActivity(), 0, new Intent(intentFilterAction), PendingIntent.FLAG_IMMUTABLE);
+		PendingIntent sentIntent = PendingIntent.getBroadcast(this.cordova.getActivity(), 0, new Intent(intentFilterAction), 0);
 
 		// depending on the number of parts we send a text message or multi parts
 		if (parts.size() > 1) {
